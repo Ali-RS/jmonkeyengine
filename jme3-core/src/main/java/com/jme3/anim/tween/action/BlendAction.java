@@ -12,13 +12,23 @@ public class BlendAction extends BlendableAction {
     private int firstActiveIndex;
     private int secondActiveIndex;
     final private BlendSpace blendSpace;
+    private final BlendMode blendMode;
     private float blendWeight;
-    final private double[] timeFactor;
+    private double lastTime;
+    // In stretch mode it contains time factor and in loop mode it contains the time
+    final private double[] timeData;
     final private Map<HasLocalTransform, Transform> targetMap = new HashMap<>();
 
+    public enum BlendMode {Stretch, Loop}
+
     public BlendAction(BlendSpace blendSpace, BlendableAction... actions) {
+        this(blendSpace, BlendMode.Loop, actions);
+    }
+
+    public BlendAction(BlendSpace blendSpace, BlendMode blendMode, BlendableAction... actions) {
         super(actions);
-        timeFactor = new double[actions.length];
+        this.blendMode = blendMode;
+        timeData = new double[actions.length];
         this.blendSpace = blendSpace;
         blendSpace.setBlendAction(this);
 
@@ -36,14 +46,16 @@ public class BlendAction extends BlendableAction {
             }
         }
 
-        //Blending effect maybe unexpected when blended animation don't have the same length
-        //Stretching any action that doesn't have the same length.
-        for (int i = 0; i < this.actions.length; i++) {
-            this.timeFactor[i] = 1;
-            if (this.actions[i].getLength() != getLength()) {
-                double actionLength = this.actions[i].getLength();
-                if (actionLength > 0 && getLength() > 0) {
-                    this.timeFactor[i] = this.actions[i].getLength() / getLength();
+        if(blendMode == BlendMode.Stretch) {
+            //Blending effect maybe unexpected when blended animation don't have the same length
+            //Stretching any action that doesn't have the same length.
+            for (int i = 0; i < this.actions.length; i++) {
+                this.timeData[i] = 1;
+                if (this.actions[i].getLength() != getLength()) {
+                    double actionLength = this.actions[i].getLength();
+                    if (actionLength > 0 && getLength() > 0) {
+                        this.timeData[i] = this.actions[i].getLength() / getLength();
+                    }
                 }
             }
         }
@@ -60,7 +72,8 @@ public class BlendAction extends BlendableAction {
         //only interpolate the first action if the weight if below 1.
         if (blendWeight < 1f) {
             firstActiveAction.setWeight(1f);
-            firstActiveAction.interpolate(t * timeFactor[firstActiveIndex]);
+            //firstActiveAction.interpolate(t * timeFactor[firstActiveIndex]);
+            interpolate(firstActiveAction, firstActiveIndex, t);
             if (blendWeight == 0) {
                 for (HasLocalTransform target : targetMap.keySet()) {
                     collect(target, targetMap.get(target));
@@ -70,11 +83,25 @@ public class BlendAction extends BlendableAction {
 
         //Second action should be interpolated
         secondActiveAction.setWeight(blendWeight);
-        secondActiveAction.interpolate(t * timeFactor[secondActiveIndex]);
+        //secondActiveAction.interpolate(t * timeFactor[secondActiveIndex]);
+        interpolate(secondActiveAction, secondActiveIndex, t);
 
         firstActiveAction.setCollectTransformDelegate(null);
         secondActiveAction.setCollectTransformDelegate(null);
 
+        lastTime = t;
+    }
+
+    private void interpolate(BlendableAction action, int index, double time) {
+        if (blendMode == BlendMode.Stretch) {
+            action.interpolate(time * timeData[index]); // In stretch mode timeData represents time factor
+        } else { // Loop mode
+            double tpf = time - lastTime;
+            timeData[index] += tpf;
+            if(!action.interpolate(timeData[index])) { // In loop mode timeData represents time
+                timeData[index] = 0;
+            }
+        }
     }
 
     protected Action[] getActions() {
