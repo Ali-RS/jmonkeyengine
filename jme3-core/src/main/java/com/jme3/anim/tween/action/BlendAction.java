@@ -46,7 +46,7 @@ public class BlendAction extends BlendableAction {
             }
         }
 
-        if(blendMode == BlendMode.Stretch) {
+        if (blendMode == BlendMode.Stretch) {
             //Blending effect maybe unexpected when blended animation don't have the same length
             //Stretching any action that doesn't have the same length.
             for (int i = 0; i < this.actions.length; i++) {
@@ -59,6 +59,15 @@ public class BlendAction extends BlendableAction {
                 }
             }
         }
+    }
+
+    @Override
+    public boolean interpolate(double t) {
+        boolean interpolate = super.interpolate(t);
+        if (!interpolate) {
+            lastTime = 0;
+        }
+        return interpolate;
     }
 
     @Override
